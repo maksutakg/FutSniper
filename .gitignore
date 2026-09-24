@@ -1,0 +1,20 @@
+# bağımlılıklar
+node_modules/
+
+# log ve geçici dosyalar
+npm-debug.log*
+*.log
+*.tmp
+
+# editör / işletim sistemi
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ortam dosyaları
+.env
+.env.*
+
+# dist/ bilerek repoda tutuluyor: kullanıcılar derlenmiş fut-sniper.user.js dosyasını doğrudan kurar
