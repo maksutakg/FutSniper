@@ -17,8 +17,9 @@ test('boş storage varsayılanları döndürür, dryRun açık', () => {
   assert.deepEqual(s, { ...DEFAULTS });
   assert.equal(s.dryRun, true);
   assert.equal(s.delayMinMs, 3500);
-  assert.equal(s.sessionMaxSearches, 650);
-  assert.equal(s.dailyMaxSearches, 2500);
+  assert.equal(s.dailyMaxSearches, 3500);
+  assert.equal(s.workMinMs, 2400000);
+  assert.equal(s.restMinMs, 1200000);
 });
 
 test('kaydedilen ayarlar varsayılanlarla birleşir', () => {

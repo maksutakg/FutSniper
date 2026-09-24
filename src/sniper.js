@@ -29,7 +29,7 @@ export function createInterruptibleSleep() {
 
 export function createSniper({
   market, pacer, settings, sleep, rand,
-  onLog = () => {}, onBuy = () => {}, onSearch = () => {},
+  onLog = () => {}, onBuy = () => {}, onSearch = () => {}, onPhase = () => {},
 }) {
   let stopped = false;
 
@@ -62,6 +62,14 @@ export function createSniper({
     while (!stopped) {
       const step = pacer.next();
       if (step.action === 'stop') return { reason: step.reason };
+      if (step.action === 'rest') {
+        onLog(`Dinleniyor: ${Math.round(step.waitMs / 60000)} dk, sonra kendiliğinden devam`);
+        onPhase('rest', step.waitMs);
+        await sleep(step.waitMs);
+        if (stopped) break;
+        onPhase('work');
+        continue;
+      }
       if (step.action === 'break') onLog(`Mola: ${Math.round(step.waitMs / 1000)} sn`);
       await sleep(step.waitMs);
       if (stopped) break;

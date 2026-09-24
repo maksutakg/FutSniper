@@ -16,9 +16,16 @@
     breakEveryMax: 35,
     breakMinMs: 15e3,
     breakMaxMs: 3e4,
-    sessionMaxSearches: 650,
-    sessionMaxMs: 36e5,
-    dailyMaxSearches: 2500,
+    // aramaların bu kadarında kısa "dalgınlık" duraklaması (insan gibi düzensizlik)
+    hiccupChance: 0.08,
+    hiccupMinMs: 1e4,
+    hiccupMaxMs: 25e3,
+    // çalış–dinlen döngüsü: dinlenmeden sonra kendiliğinden devam eder
+    workMinMs: 24e5,
+    workMaxMs: 36e5,
+    restMinMs: 12e5,
+    restMaxMs: 24e5,
+    dailyMaxSearches: 3500,
     maxBuys: 5,
     dryRun: true,
     maxBuy: 0,
@@ -92,11 +99,11 @@
     return Math.round(min + rand() * (max - min));
   }
   function createPacer(settings, { now, rand, today, daily }) {
-    const startedAt = now();
     let sessionSearches = 0;
     let buys = 0;
     let sinceBreak = 0;
     let breakAt = randInt(rand, settings.breakEveryMin, settings.breakEveryMax);
+    let workEndsAt = now() + randBetween(rand, settings.workMinMs, settings.workMaxMs);
     let dailyDate = daily.date;
     let dailyCount = daily.count;
     function syncDay() {
@@ -109,15 +116,21 @@
     function next() {
       syncDay();
       if (buys >= settings.maxBuys) return { action: "stop", reason: "maxBuys" };
-      if (sessionSearches >= settings.sessionMaxSearches) return { action: "stop", reason: "sessionSearches" };
-      if (now() - startedAt >= settings.sessionMaxMs) return { action: "stop", reason: "sessionTime" };
       if (dailyCount >= settings.dailyMaxSearches) return { action: "stop", reason: "daily" };
+      if (now() >= workEndsAt) {
+        const restMs = randBetween(rand, settings.restMinMs, settings.restMaxMs);
+        workEndsAt = now() + restMs + randBetween(rand, settings.workMinMs, settings.workMaxMs);
+        sinceBreak = 0;
+        return { action: "rest", waitMs: restMs };
+      }
       if (sinceBreak >= breakAt) {
         sinceBreak = 0;
         breakAt = randInt(rand, settings.breakEveryMin, settings.breakEveryMax);
         return { action: "break", waitMs: randBetween(rand, settings.breakMinMs, settings.breakMaxMs) };
       }
-      return { action: "search", waitMs: randBetween(rand, settings.delayMinMs, settings.delayMaxMs) };
+      const hiccup = rand() >= 1 - settings.hiccupChance;
+      const waitMs = hiccup ? randBetween(rand, settings.hiccupMinMs, settings.hiccupMaxMs) : randBetween(rand, settings.delayMinMs, settings.delayMaxMs);
+      return { action: "search", waitMs };
     }
     function recordSearch() {
       syncDay();
@@ -236,6 +249,8 @@
     onBuy = () => {
     },
     onSearch = () => {
+    },
+    onPhase = () => {
     }
   }) {
     let stopped = false;
@@ -264,6 +279,14 @@
       while (!stopped) {
         const step = pacer.next();
         if (step.action === "stop") return { reason: step.reason };
+        if (step.action === "rest") {
+          onLog(`Dinleniyor: ${Math.round(step.waitMs / 6e4)} dk, sonra kendili\u011Finden devam`);
+          onPhase("rest", step.waitMs);
+          await sleep(step.waitMs);
+          if (stopped) break;
+          onPhase("work");
+          continue;
+        }
         if (step.action === "break") onLog(`Mola: ${Math.round(step.waitMs / 1e3)} sn`);
         await sleep(step.waitMs);
         if (stopped) break;
@@ -340,16 +363,24 @@
   }
 
   // src/ui.js
+  var SEC = 1e3;
+  var MIN = 6e4;
+  var PCT = 0.01;
   var SETTING_FIELDS = [
-    ["delayMinMs", "Bekleme min (ms)"],
-    ["delayMaxMs", "Bekleme max (ms)"],
-    ["breakEveryMin", "Mola: en az ka\xE7 aramada"],
-    ["breakEveryMax", "Mola: en fazla ka\xE7 aramada"],
-    ["breakMinMs", "Mola min (ms)"],
-    ["breakMaxMs", "Mola max (ms)"],
-    ["sessionMaxSearches", "Oturum arama s\u0131n\u0131r\u0131"],
-    ["sessionMaxMs", "Oturum s\xFCre s\u0131n\u0131r\u0131 (ms)"],
-    ["dailyMaxSearches", "G\xFCnl\xFCk arama s\u0131n\u0131r\u0131"]
+    ["delayMinMs", "Bekleme min (sn)", SEC],
+    ["delayMaxMs", "Bekleme max (sn)", SEC],
+    ["hiccupChance", "Uzun duraklama olas\u0131l\u0131\u011F\u0131 (%)", PCT],
+    ["hiccupMinMs", "Uzun duraklama min (sn)", SEC],
+    ["hiccupMaxMs", "Uzun duraklama max (sn)", SEC],
+    ["breakEveryMin", "Mola: en az ka\xE7 aramada", 1],
+    ["breakEveryMax", "Mola: en fazla ka\xE7 aramada", 1],
+    ["breakMinMs", "Mola min (sn)", SEC],
+    ["breakMaxMs", "Mola max (sn)", SEC],
+    ["workMinMs", "\xC7al\u0131\u015Fma s\xFCresi min (dk)", MIN],
+    ["workMaxMs", "\xC7al\u0131\u015Fma s\xFCresi max (dk)", MIN],
+    ["restMinMs", "Dinlenme s\xFCresi min (dk)", MIN],
+    ["restMaxMs", "Dinlenme s\xFCresi max (dk)", MIN],
+    ["dailyMaxSearches", "G\xFCnl\xFCk arama s\u0131n\u0131r\u0131", 1]
   ];
   var CSS = `
 #fut-sniper { position: fixed; top: 80px; right: 16px; width: 310px; z-index: 99999;
@@ -497,13 +528,14 @@
       update({ player: { ...current.player, cardId, cardLabel } });
       cardSelect.value = cardId ?? "";
     }
-    for (const [key, label] of SETTING_FIELDS) {
+    for (const [key, label, scale] of SETTING_FIELDS) {
       const wrap = document.createElement("label");
       wrap.textContent = label;
       const input = document.createElement("input");
       input.type = "number";
-      input.value = current[key];
-      input.addEventListener("change", () => update({ [key]: Number(input.value) }));
+      input.step = "any";
+      input.value = Number((current[key] / scale).toFixed(2));
+      input.addEventListener("change", () => update({ [key]: Math.round(Number(input.value) * scale * 1e6) / 1e6 }));
       wrap.appendChild(input);
       $(".fs-fields").appendChild(wrap);
     }
@@ -630,8 +662,6 @@
   var REASONS = {
     manual: "elle durduruldu",
     maxBuys: "al\u0131m s\u0131n\u0131r\u0131na ula\u015F\u0131ld\u0131",
-    sessionSearches: "oturum arama s\u0131n\u0131r\u0131 doldu",
-    sessionTime: "oturum s\xFCresi doldu",
     daily: "g\xFCnl\xFCk arama s\u0131n\u0131r\u0131 doldu",
     captcha: "CAPTCHA \u2014 Web App'te elle \xE7\xF6z",
     rateLimited: "\xE7ok fazla istek / market kilitli (soft ban habercisi) \u2014 bir s\xFCre ara ver",
@@ -641,7 +671,7 @@
     server: "sunucu hatas\u0131 tekrarland\u0131",
     unknown: "bilinmeyen hata"
   };
-  var QUIET_REASONS = /* @__PURE__ */ new Set(["manual", "maxBuys", "sessionSearches", "sessionTime", "daily"]);
+  var QUIET_REASONS = /* @__PURE__ */ new Set(["manual", "maxBuys", "daily"]);
   function waitForWebApp() {
     return new Promise((resolve) => {
       const timer = setInterval(() => {
@@ -740,6 +770,14 @@
           spent += item.buyNowPrice;
           beep(1);
           renderStats();
+        },
+        onPhase(phase, waitMs) {
+          if (phase === "rest") {
+            const resumeAt = new Date(Date.now() + waitMs).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+            panel.setStatus(`Dinleniyor \u2014 ${resumeAt}'te devam`, "idle");
+          } else {
+            panel.setStatus(runningText, "running");
+          }
         }
       });
       active = {
@@ -748,7 +786,8 @@
           interrupt();
         }
       };
-      panel.setStatus(run.dryRun ? "\xC7al\u0131\u015F\u0131yor (DRY-RUN)" : "\xC7al\u0131\u015F\u0131yor", "running");
+      const runningText = run.dryRun ? "\xC7al\u0131\u015F\u0131yor (DRY-RUN)" : "\xC7al\u0131\u015F\u0131yor";
+      panel.setStatus(runningText, "running");
       panel.log(`Ba\u015Flad\u0131: ${run.player.name} [${run.player.cardLabel}] \u2264 ${run.maxBuy}`);
       const result = await sniper.run();
       active = null;

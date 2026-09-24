@@ -13,8 +13,6 @@ import { alertUser, beep, requestNotificationPermission } from './alerts.js';
 const REASONS = {
   manual: 'elle durduruldu',
   maxBuys: 'alım sınırına ulaşıldı',
-  sessionSearches: 'oturum arama sınırı doldu',
-  sessionTime: 'oturum süresi doldu',
   daily: 'günlük arama sınırı doldu',
   captcha: 'CAPTCHA — Web App\'te elle çöz',
   rateLimited: 'çok fazla istek / market kilitli (soft ban habercisi) — bir süre ara ver',
@@ -26,7 +24,7 @@ const REASONS = {
 };
 
 // Kendi limitlerimiz dışındaki her durma kullanıcıyı uyarır.
-const QUIET_REASONS = new Set(['manual', 'maxBuys', 'sessionSearches', 'sessionTime', 'daily']);
+const QUIET_REASONS = new Set(['manual', 'maxBuys', 'daily']);
 
 function waitForWebApp() {
   return new Promise((resolve) => {
@@ -141,6 +139,15 @@ async function main() {
         beep(1);
         renderStats();
       },
+      onPhase(phase, waitMs) {
+        if (phase === 'rest') {
+          const resumeAt = new Date(Date.now() + waitMs)
+            .toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+          panel.setStatus(`Dinleniyor — ${resumeAt}'te devam`, 'idle');
+        } else {
+          panel.setStatus(runningText, 'running');
+        }
+      },
     });
 
     active = {
@@ -149,7 +156,8 @@ async function main() {
         interrupt();
       },
     };
-    panel.setStatus(run.dryRun ? 'Çalışıyor (DRY-RUN)' : 'Çalışıyor', 'running');
+    const runningText = run.dryRun ? 'Çalışıyor (DRY-RUN)' : 'Çalışıyor';
+    panel.setStatus(runningText, 'running');
     panel.log(`Başladı: ${run.player.name} [${run.player.cardLabel}] ≤ ${run.maxBuy}`);
 
     const result = await sniper.run();

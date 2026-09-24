@@ -1,13 +1,23 @@
+const SEC = 1000;
+const MIN = 60000;
+const PCT = 0.01;
+
+// [ayar, etiket, birim çarpanı]: panelde sn/dk/% gösterilir, ayarlarda ms/oran saklanır
 const SETTING_FIELDS = [
-  ['delayMinMs', 'Bekleme min (ms)'],
-  ['delayMaxMs', 'Bekleme max (ms)'],
-  ['breakEveryMin', 'Mola: en az kaç aramada'],
-  ['breakEveryMax', 'Mola: en fazla kaç aramada'],
-  ['breakMinMs', 'Mola min (ms)'],
-  ['breakMaxMs', 'Mola max (ms)'],
-  ['sessionMaxSearches', 'Oturum arama sınırı'],
-  ['sessionMaxMs', 'Oturum süre sınırı (ms)'],
-  ['dailyMaxSearches', 'Günlük arama sınırı'],
+  ['delayMinMs', 'Bekleme min (sn)', SEC],
+  ['delayMaxMs', 'Bekleme max (sn)', SEC],
+  ['hiccupChance', 'Uzun duraklama olasılığı (%)', PCT],
+  ['hiccupMinMs', 'Uzun duraklama min (sn)', SEC],
+  ['hiccupMaxMs', 'Uzun duraklama max (sn)', SEC],
+  ['breakEveryMin', 'Mola: en az kaç aramada', 1],
+  ['breakEveryMax', 'Mola: en fazla kaç aramada', 1],
+  ['breakMinMs', 'Mola min (sn)', SEC],
+  ['breakMaxMs', 'Mola max (sn)', SEC],
+  ['workMinMs', 'Çalışma süresi min (dk)', MIN],
+  ['workMaxMs', 'Çalışma süresi max (dk)', MIN],
+  ['restMinMs', 'Dinlenme süresi min (dk)', MIN],
+  ['restMaxMs', 'Dinlenme süresi max (dk)', MIN],
+  ['dailyMaxSearches', 'Günlük arama sınırı', 1],
 ];
 
 // Renkler Web App'in kendi temasından (body, .btn-standard, .btn-standard.primary) alındı.
@@ -170,13 +180,15 @@ export function createPanel({ settings, onChange, onPlayerQuery, onFetchVersions
     cardSelect.value = cardId ?? '';
   }
 
-  for (const [key, label] of SETTING_FIELDS) {
+  for (const [key, label, scale] of SETTING_FIELDS) {
     const wrap = document.createElement('label');
     wrap.textContent = label;
     const input = document.createElement('input');
     input.type = 'number';
-    input.value = current[key];
-    input.addEventListener('change', () => update({ [key]: Number(input.value) }));
+    input.step = 'any';
+    // 0.08 / 0.01 = 8.000000000000002 gibi kayan nokta artıklarını gösterme
+    input.value = Number((current[key] / scale).toFixed(2));
+    input.addEventListener('change', () => update({ [key]: Math.round(Number(input.value) * scale * 1e6) / 1e6 }));
     wrap.appendChild(input);
     $('.fs-fields').appendChild(wrap);
   }

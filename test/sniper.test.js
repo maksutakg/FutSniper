@@ -81,7 +81,7 @@ test('aynı sonuçtaki birden fazla ucuz ilanı alım sınırına kadar alır', 
 
 test('dry-run aynı sonuçtaki her uygun ilanı loglar, hiçbirini almaz', async () => {
   const { sniper, calls } = setup({
-    settings: { dryRun: true, sessionMaxSearches: 1 },
+    settings: { dryRun: true, dailyMaxSearches: 1 },
     searches: [[item(1, 9000), item(2, 9500)]],
   });
   await sniper.run();
@@ -99,10 +99,10 @@ test('arama sırasında stop() gelirse sonuçtaki ilanlar denenmez', async () =>
 
 test('yanlış versiyondaki ucuz ilan alınmaz', async () => {
   const { sniper, calls } = setup({
-    settings: { sessionMaxSearches: 1 },
+    settings: { dailyMaxSearches: 1 },
     searches: [[item(1, 1000, 123)]],
   });
-  assert.equal((await sniper.run()).reason, 'sessionSearches');
+  assert.equal((await sniper.run()).reason, 'daily');
   assert.equal(calls.buy.length, 0);
 });
 
@@ -120,11 +120,11 @@ test('max altında sonuç gelince en ucuzu hemen alır', async () => {
 
 test('dry-run satın almaz, loglar', async () => {
   const { sniper, calls } = setup({
-    settings: { dryRun: true, sessionMaxSearches: 3 },
+    settings: { dryRun: true, dailyMaxSearches: 3 },
     searches: [[item(1, 5000)], [item(2, 5000)], [item(3, 5000)]],
   });
   const result = await sniper.run();
-  assert.equal(result.reason, 'sessionSearches');
+  assert.equal(result.reason, 'daily');
   assert.equal(calls.buy.length, 0);
   assert.ok(calls.log.some((m) => m.includes('DRY-RUN')));
 });
@@ -159,11 +159,11 @@ test('satın almada captcha → durur', async () => {
 
 test('aramada server hatası: 30 sn bekleyip 1 kez tekrar dener', async () => {
   const { sniper, calls } = setup({
-    settings: { sessionMaxSearches: 3 },
+    settings: { dailyMaxSearches: 3 },
     searches: [new MarketError('server', 503), [], []],
   });
   const result = await sniper.run();
-  assert.equal(result.reason, 'sessionSearches');
+  assert.equal(result.reason, 'daily');
   assert.ok(calls.sleep.includes(SERVER_RETRY_MS));
 });
 
@@ -181,4 +181,30 @@ test('stop() döngüyü manual sebebiyle bitirir', async () => {
     searches: [(s) => { s.stop(); return []; }],
   });
   assert.equal((await sniper.run()).reason, 'manual');
+});
+
+test('dinlenme adımında bekler, bildirir ve kendiliğinden devam eder', async () => {
+  const s = { ...DEFAULTS, player: PLAYER, maxBuy: 10000, dryRun: false, dailyMaxSearches: 1 };
+  const steps = [{ action: 'rest', waitMs: 1200000 }];
+  const pacer = createPacer(s, {
+    now: () => 0, rand: () => 0, today: () => '2026-09-24', daily: { date: '2026-09-24', count: 0 },
+  });
+  const realNext = pacer.next;
+  pacer.next = () => steps.shift() ?? realNext();
+  const sleeps = [];
+  const phases = [];
+  const logs = [];
+  const sniper = createSniper({
+    market: { async search() { return []; }, async buy() {} },
+    pacer,
+    settings: s,
+    sleep: async (ms) => { sleeps.push(ms); },
+    rand: () => 0,
+    onLog: (m) => logs.push(m),
+    onPhase: (phase, ms) => phases.push([phase, ms]),
+  });
+  assert.equal((await sniper.run()).reason, 'daily');
+  assert.equal(sleeps[0], 1200000);
+  assert.deepEqual(phases, [['rest', 1200000], ['work', undefined]]);
+  assert.ok(logs.some((m) => m.includes('Dinleniyor: 20 dk')));
 });

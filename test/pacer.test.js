@@ -13,12 +13,29 @@ function deps(overrides = {}) {
   };
 }
 
+// Sırayla verilen değerleri döndürür, bitince 0 döner.
+function seq(values) {
+  const queue = [...values];
+  return () => (queue.length ? queue.shift() : 0);
+}
+
+const NO_HICCUP = { ...DEFAULTS, hiccupChance: 0 };
+
 test('bekleme 3500–6000 ms aralığında', () => {
-  const low = createPacer(DEFAULTS, deps({ rand: () => 0 })).next();
+  const low = createPacer(NO_HICCUP, deps({ rand: () => 0 })).next();
   assert.deepEqual(low, { action: 'search', waitMs: 3500 });
-  const high = createPacer(DEFAULTS, deps({ rand: () => 0.999999 })).next();
+  const high = createPacer(NO_HICCUP, deps({ rand: () => 0.999999 })).next();
   assert.equal(high.action, 'search');
   assert.ok(high.waitMs <= 6000 && high.waitMs >= 5999);
+});
+
+test('aramaların ~%8inde 10–25 sn duraklama olur', () => {
+  // kurulum 2 rand çeker (mola ve çalışma süresi); sonra duraklama zarı, sonra süre
+  const hiccup = createPacer(DEFAULTS, deps({ rand: seq([0, 0, 0.95, 0]) })).next();
+  assert.deepEqual(hiccup, { action: 'search', waitMs: 10000 });
+  const normal = createPacer(DEFAULTS, deps({ rand: seq([0, 0, 0.5, 0]) })).next();
+  assert.deepEqual(normal, { action: 'search', waitMs: 3500 });
+  assert.equal(DEFAULTS.hiccupChance, 0.08);
 });
 
 test('rand=0 iken 25 aramadan sonra 15 sn mola', () => {
@@ -40,28 +57,54 @@ test('rand≈1 iken mola 35 aramada bir', () => {
   assert.equal(p.next().action, 'break');
 });
 
-test('oturum arama sınırında durur', () => {
-  const p = createPacer({ ...DEFAULTS, sessionMaxSearches: 3 }, deps());
-  for (let i = 0; i < 3; i++) {
+test('40 dk çalışınca 20 dk dinlenir, sonra kendiliğinden devam eder', () => {
+  let t = 0;
+  const p = createPacer(DEFAULTS, deps({ now: () => t }));
+  assert.equal(p.next().action, 'search');
+  t = 2400000 - 1;
+  assert.equal(p.next().action, 'search');
+  t = 2400000;
+  assert.deepEqual(p.next(), { action: 'rest', waitMs: 1200000 });
+  t = 3600000;
+  assert.equal(p.next().action, 'search');
+  // bir sonraki dinlenme: 2400000 + 1200000 dinlenme + 2400000 çalışma
+  t = 6000000;
+  assert.equal(p.next().action, 'rest');
+});
+
+test('rand≈1 iken 60 dk çalışır, 40 dk dinlenir', () => {
+  let t = 0;
+  const p = createPacer(DEFAULTS, deps({ now: () => t, rand: () => 0.999999 }));
+  t = 3600000 - 1000;
+  assert.equal(p.next().action, 'search');
+  t = 3600000;
+  const rest = p.next();
+  assert.equal(rest.action, 'rest');
+  assert.ok(rest.waitMs >= 2399000 && rest.waitMs <= 2400000);
+});
+
+test('dinlenme kısa mola sayacını sıfırlar', () => {
+  let t = 0;
+  const p = createPacer(DEFAULTS, deps({ now: () => t }));
+  for (let i = 0; i < 20; i++) {
     p.next();
     p.recordSearch();
   }
-  assert.deepEqual(p.next(), { action: 'stop', reason: 'sessionSearches' });
+  t = 2400000;
+  assert.equal(p.next().action, 'rest');
+  t = 3600000;
+  for (let i = 0; i < 25; i++) {
+    assert.equal(p.next().action, 'search');
+    p.recordSearch();
+  }
+  assert.equal(p.next().action, 'break');
 });
 
-test('oturum süresi dolunca durur', () => {
-  let t = 1000;
-  const p = createPacer(DEFAULTS, deps({ now: () => t }));
-  assert.equal(p.next().action, 'search');
-  t = 1000 + 3600000;
-  assert.deepEqual(p.next(), { action: 'stop', reason: 'sessionTime' });
-});
-
-test('günlük sınırda durur, gün değişince devam eder', () => {
+test('günlük 3500 sınırında durur, gün değişince devam eder', () => {
   let day = '2026-09-24';
   const p = createPacer(DEFAULTS, deps({
     today: () => day,
-    daily: { date: '2026-09-24', count: 2500 },
+    daily: { date: '2026-09-24', count: 3500 },
   }));
   assert.deepEqual(p.next(), { action: 'stop', reason: 'daily' });
   day = '2026-09-25';

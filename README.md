@@ -1,45 +1,34 @@
 # FUT Sniper
 
-EA FC Ultimate Team Web App için Tampermonkey userscript'i. Seçilen oyuncu kartını, belirlenen
-**Max BIN** fiyatının altında bulunca anında satın alır.
+EA FC Ultimate Team Web App için Tampermonkey userscript'i: seçtiğin kartı, belirlediğin
+**Max BIN**'in altında bulunca anında satın alır.
 
-> **Uyarı:** Otomasyon EA kullanım şartlarına aykırıdır. Transfer market soft ban (12–72 saat) ve
-> tekrarlarsa kalıcı ban riski vardır. Kullanım tamamen kendi sorumluluğunuzdadır.
+> **Uyarı:** EA kullanım şartlarına aykırıdır; soft ban (12–72 saat) ve kalıcı ban riski vardır.
+> Kullanım kendi sorumluluğundadır.
 
-## Kurulum (kullanıcılar için)
+## Kurulum
 
-Node, npm veya VS Code gerekmez; yalnızca Chrome + Tampermonkey.
+Node veya VS Code gerekmez, sadece Chrome + [Tampermonkey](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo).
 
-1. Chrome'a [Tampermonkey](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo) kurun.
-2. `chrome://extensions` → sağ üstte **Developer mode**'u açın. Tampermonkey → **Details** →
-   **Allow User Scripts** anahtarı varsa onu da açın.
-3. [`dist/fut-sniper.user.js`](dist/fut-sniper.user.js) dosyasını indirin.
-4. Tampermonkey → **Dashboard** → **Utilities** → **Import from file** → dosyayı seçip **Install**.
-5. [Web App](https://www.ea.com/ea-sports-fc/ultimate-team/web-app/)'e giriş yapıp sayfayı yenileyin;
-   sağ üstte **FUT Sniper** paneli çıkar.
+1. `chrome://extensions` → **Developer mode** açık; Tampermonkey → Details → **Allow User Scripts** açık.
+2. [`dist/fut-sniper.user.js`](dist/fut-sniper.user.js) dosyasını indir → Tampermonkey → Dashboard →
+   Utilities → **Import from file** → Install.
+3. Web App'e gir, sayfayı yenile; sağ üstte **FUT Sniper** paneli çıkar.
 
 ## Kullanım
 
-1. **Oyuncu ara** kutusuna ismi yazıp listeden seçin.
-2. **Getir** ile oyuncunun piyasadaki kart versiyonlarını (normal, TOTW, …) getirip hedef versiyonu
-   seçin. Listede olmayan bir versiyon için **Kart ID** (definitionId) girebilirsiniz.
-3. **Max BIN**'i piyasa fiyatının altında girin, **Kaç kart alsın**'ı ayarlayın.
-4. Önce **Dry-run** açıkken **Başlat**: bot arar ve "alınırdı" diye loglar ama satın almaz.
-5. Sonuçlar mantıklıysa Dry-run'ı kapatıp tekrar başlatın.
+1. Oyuncuyu ara ve seç → **Getir** ile versiyonu (normal, TOTW…) seç.
+2. **Max BIN** ve **Kaç kart alsın** gir.
+3. Önce **Dry-run** ile dene (satın almaz, sadece loglar), sonra kapatıp **Başlat**.
 
-Bot captcha, çok fazla istek (429), market kilidi, yetersiz coin gibi durumlarda kendiliğinden durur
-ve sesli uyarı verir. Captcha'yı Web App'te elle çözüp tekrar başlatın.
+## Özellikler
 
-### Varsayılan hız ayarları
-
-| Ayar | Değer |
-|---|---|
-| Aramalar arası bekleme | 3.5–6 sn (rastgele) |
-| Mola | her 25–35 aramada 15–30 sn |
-| Oturum sınırı | 650 arama veya 1 saat |
-| Günlük sınır | 2.500 arama |
-
-Hepsi paneldeki **Ayarlar** bölümünden değiştirilebilir.
+- Sadece seçilen kart versiyonunu arar; başka versiyonu asla almaz.
+- Her aramada rastgele min BIN ile güncel sonuç alır; aynı aramadaki tüm ucuz ilanları sırayla dener.
+- İnsan gibi tempo: 3.5–6 sn bekleme, ara sıra 10–25 sn duraklama, 25–35 aramada bir kısa mola.
+- 40–60 dk çalışır, 20–40 dk dinlenir, kendiliğinden devam eder; günlük sınır 3.500 arama.
+- Captcha, 429, market kilidi, yetersiz coin gibi durumlarda durur ve sesli uyarı verir.
+- Tüm ayarlar paneldeki **Ayarlar** bölümünden değiştirilebilir.
 
 ## Geliştirme
 
@@ -48,6 +37,3 @@ npm install
 npm test        # birim testleri
 npm run build   # src/ → dist/fut-sniper.user.js
 ```
-
-Kod `src/` altında modüllere ayrılmıştır; build hepsini tek userscript dosyasında birleştirir.
-Web App iç yapısıyla ilgili notlar: [`docs/webapp-internals.md`](docs/webapp-internals.md).

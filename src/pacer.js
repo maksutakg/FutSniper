@@ -7,11 +7,11 @@ function randBetween(rand, min, max) {
 }
 
 export function createPacer(settings, { now, rand, today, daily }) {
-  const startedAt = now();
   let sessionSearches = 0;
   let buys = 0;
   let sinceBreak = 0;
   let breakAt = randInt(rand, settings.breakEveryMin, settings.breakEveryMax);
+  let workEndsAt = now() + randBetween(rand, settings.workMinMs, settings.workMaxMs);
   let dailyDate = daily.date;
   let dailyCount = daily.count;
 
@@ -26,15 +26,24 @@ export function createPacer(settings, { now, rand, today, daily }) {
   function next() {
     syncDay();
     if (buys >= settings.maxBuys) return { action: 'stop', reason: 'maxBuys' };
-    if (sessionSearches >= settings.sessionMaxSearches) return { action: 'stop', reason: 'sessionSearches' };
-    if (now() - startedAt >= settings.sessionMaxMs) return { action: 'stop', reason: 'sessionTime' };
     if (dailyCount >= settings.dailyMaxSearches) return { action: 'stop', reason: 'daily' };
+    if (now() >= workEndsAt) {
+      const restMs = randBetween(rand, settings.restMinMs, settings.restMaxMs);
+      workEndsAt = now() + restMs + randBetween(rand, settings.workMinMs, settings.workMaxMs);
+      sinceBreak = 0;
+      return { action: 'rest', waitMs: restMs };
+    }
     if (sinceBreak >= breakAt) {
       sinceBreak = 0;
       breakAt = randInt(rand, settings.breakEveryMin, settings.breakEveryMax);
       return { action: 'break', waitMs: randBetween(rand, settings.breakMinMs, settings.breakMaxMs) };
     }
-    return { action: 'search', waitMs: randBetween(rand, settings.delayMinMs, settings.delayMaxMs) };
+    // Hep aynı aralıkla arama makine gibi görünür: arada bir "dalgınlık" duraklaması.
+    const hiccup = rand() >= 1 - settings.hiccupChance;
+    const waitMs = hiccup
+      ? randBetween(rand, settings.hiccupMinMs, settings.hiccupMaxMs)
+      : randBetween(rand, settings.delayMinMs, settings.delayMaxMs);
+    return { action: 'search', waitMs };
   }
 
   function recordSearch() {
