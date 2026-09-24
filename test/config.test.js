@@ -54,3 +54,36 @@ test('delayWarning 3000 ms altında uyarır', () => {
   assert.equal(delayWarning({ delayMinMs: 3000 }), null);
   assert.match(delayWarning({ delayMinMs: 2000 }), /3 sn/);
 });
+
+test('sadece varsayılandan farklı ayarlar kaydedilir', () => {
+  const st = memoryStorage();
+  saveSettings(st, { ...DEFAULTS, maxBuy: 12000 });
+  const raw = JSON.parse(st.getItem('futSniper.settings'));
+  assert.equal(raw.maxBuy, 12000);
+  assert.equal('dailyMaxSearches' in raw, false);
+  assert.equal('delayMinMs' in raw, false);
+});
+
+test('eski kayıt: varsayılan 2500 ve oturum ayarları temizlenir, kullanıcı değerleri korunur', () => {
+  const st = memoryStorage();
+  st.setItem('futSniper.settings', JSON.stringify({
+    ...DEFAULTS, dailyMaxSearches: 2500, sessionMaxSearches: 650, sessionMaxMs: 3600000, maxBuy: 83000,
+  }));
+  const s = loadSettings(st);
+  assert.equal(s.dailyMaxSearches, 3500);
+  assert.equal(s.maxBuy, 83000);
+  assert.equal('sessionMaxSearches' in s, false);
+  assert.equal('sessionMaxMs' in s, false);
+});
+
+test('eski kayıtta kullanıcının elle girdiği günlük sınır korunur', () => {
+  const st = memoryStorage();
+  st.setItem('futSniper.settings', JSON.stringify({ dailyMaxSearches: 1800 }));
+  assert.equal(loadSettings(st).dailyMaxSearches, 1800);
+});
+
+test('yeni kayıtta 2500 bilinçli seçimse korunur', () => {
+  const st = memoryStorage();
+  saveSettings(st, { ...DEFAULTS, dailyMaxSearches: 2500 });
+  assert.equal(loadSettings(st).dailyMaxSearches, 2500);
+});

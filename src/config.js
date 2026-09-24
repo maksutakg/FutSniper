@@ -26,16 +26,36 @@ export const MIN_SAFE_DELAY_MS = 3000;
 const SETTINGS_KEY = 'futSniper.settings';
 const DAILY_KEY = 'futSniper.daily';
 
+// v1 kayıtları tüm ayarları (varsayılanlar dahil) saklıyordu; v2 yalnızca kullanıcının değiştirdiklerini.
+const SETTINGS_VERSION = 2;
+const REMOVED_KEYS = ['sessionMaxSearches', 'sessionMaxMs'];
+const V1_DAILY_DEFAULT = 2500;
+
+function migrate(saved) {
+  if (saved._v === SETTINGS_VERSION) return saved;
+  const out = { ...saved };
+  for (const key of REMOVED_KEYS) delete out[key];
+  // v1 varsayılanı olduğu gibi kaydedilmişti; kullanıcının seçimi değil, yeni varsayılana bırak
+  if (out.dailyMaxSearches === V1_DAILY_DEFAULT) delete out.dailyMaxSearches;
+  return out;
+}
+
 export function loadSettings(storage) {
   try {
-    return { ...DEFAULTS, ...(JSON.parse(storage.getItem(SETTINGS_KEY)) ?? {}) };
+    const { _v, ...saved } = migrate(JSON.parse(storage.getItem(SETTINGS_KEY)) ?? {});
+    return { ...DEFAULTS, ...saved };
   } catch {
     return { ...DEFAULTS };
   }
 }
 
+// Varsayılana eşit ayarlar saklanmaz: varsayılanlar değişince dokunulmamış ayarlar yeni değeri alır.
 export function saveSettings(storage, settings) {
-  storage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  const changed = { _v: SETTINGS_VERSION };
+  for (const [key, value] of Object.entries(settings)) {
+    if (JSON.stringify(value) !== JSON.stringify(DEFAULTS[key])) changed[key] = value;
+  }
+  storage.setItem(SETTINGS_KEY, JSON.stringify(changed));
 }
 
 export function todayKey(date = new Date()) {

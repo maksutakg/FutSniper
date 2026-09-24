@@ -34,15 +34,30 @@
   var MIN_SAFE_DELAY_MS = 3e3;
   var SETTINGS_KEY = "futSniper.settings";
   var DAILY_KEY = "futSniper.daily";
+  var SETTINGS_VERSION = 2;
+  var REMOVED_KEYS = ["sessionMaxSearches", "sessionMaxMs"];
+  var V1_DAILY_DEFAULT = 2500;
+  function migrate(saved) {
+    if (saved._v === SETTINGS_VERSION) return saved;
+    const out = { ...saved };
+    for (const key of REMOVED_KEYS) delete out[key];
+    if (out.dailyMaxSearches === V1_DAILY_DEFAULT) delete out.dailyMaxSearches;
+    return out;
+  }
   function loadSettings(storage) {
     try {
-      return { ...DEFAULTS, ...JSON.parse(storage.getItem(SETTINGS_KEY)) ?? {} };
+      const { _v, ...saved } = migrate(JSON.parse(storage.getItem(SETTINGS_KEY)) ?? {});
+      return { ...DEFAULTS, ...saved };
     } catch {
       return { ...DEFAULTS };
     }
   }
   function saveSettings(storage, settings) {
-    storage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    const changed = { _v: SETTINGS_VERSION };
+    for (const [key, value] of Object.entries(settings)) {
+      if (JSON.stringify(value) !== JSON.stringify(DEFAULTS[key])) changed[key] = value;
+    }
+    storage.setItem(SETTINGS_KEY, JSON.stringify(changed));
   }
   function todayKey(date = /* @__PURE__ */ new Date()) {
     const y = date.getFullYear();
